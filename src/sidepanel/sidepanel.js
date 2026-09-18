@@ -12,6 +12,7 @@ import { GitHubService } from '../lib/github-service.js';
 import { GitHubCache } from '../lib/github-cache.js';
 import { NotionOAuth } from '../lib/notion-oauth.js';
 import { NotionService } from '../lib/notion-service.js';
+import { GalaxyBrainService } from '../lib/galaxybrain-service.js';
 
 console.log('[Side Panel] Loading...');
 
@@ -139,6 +140,11 @@ const developerModeToggle = document.getElementById('developerModeToggle');
 const githubDeveloperSection = document.getElementById('githubDeveloperSection');
 const testGitHubBtn = document.getElementById('testGitHubBtn');
 
+// Galaxy Brain elements
+const galaxyBrainUrlInput = document.getElementById('galaxyBrainUrl');
+const galaxyBrainApiKeyInput = document.getElementById('galaxyBrainApiKey');
+const testGalaxyBrainBtn = document.getElementById('testGalaxyBrainBtn');
+
 // Notion OAuth elements
 const notionOAuthSection = document.getElementById('notionOAuthSection');
 const notionNotConnected = document.getElementById('notionNotConnected');
@@ -251,6 +257,7 @@ githubSignInBtn.addEventListener('click', handleGitHubSignIn);
 githubSignOutBtn.addEventListener('click', handleGitHubSignOut);
 developerModeToggle.addEventListener('change', handleDeveloperModeToggle);
 testGitHubBtn.addEventListener('click', handleTestGitHubConnection);
+testGalaxyBrainBtn.addEventListener('click', handleTestGalaxyBrainConnection);
 
 // Notion OAuth
 notionSignInBtn.addEventListener('click', handleNotionSignIn);
@@ -1133,6 +1140,8 @@ async function showDestinationChooser() {
   document.querySelector('[data-destination="github-issue"]').disabled = !isGitHubAuthenticated;
   document.querySelector('[data-destination="github-project"]').disabled = !isGitHubAuthenticated;
   document.querySelector('[data-destination="notion"]').disabled = !isNotionAuthenticated;
+  const galaxyBrainReady = Boolean(settings.galaxyBrainUrl && settings.galaxyBrainApiKey);
+  document.querySelector('[data-destination="galaxy-brain"]').disabled = !galaxyBrainReady;
   showScreen(screens.DESTINATION);
 }
 
@@ -1160,6 +1169,8 @@ async function handleDestinationSelected(destination) {
     await showGitHubProjectForm(aiReadyPromise);
   } else if (destination === 'notion') {
     await handleNotionDestination();
+  } else if (destination === 'galaxy-brain') {
+    await handleGalaxyBrainDestination();
   } else {
     showToast(`${destination} integration coming in later phases`, 'warning');
   }
@@ -1266,6 +1277,8 @@ async function loadSettings() {
     const settings = await getSettings();
 
     githubTokenInput.value = settings.githubToken || '';
+    galaxyBrainUrlInput.value = settings.galaxyBrainUrl || '';
+    galaxyBrainApiKeyInput.value = settings.galaxyBrainApiKey || '';
     maxDurationInput.value = settings.maxRecordingDuration || 300;
     aiSummaryToggle.checked = settings.aiSummaryEnabled !== false;
 
@@ -1300,6 +1313,8 @@ async function handleSaveSettings() {
     const pat = githubTokenInput.value.trim() || null;
     const updates = {
       githubToken: pat,
+      galaxyBrainUrl: galaxyBrainUrlInput.value.trim() || null,
+      galaxyBrainApiKey: galaxyBrainApiKeyInput.value.trim() || null,
       maxRecordingDuration: parseInt(maxDurationInput.value) || 300,
       aiSummaryEnabled: aiSummaryToggle.checked,
       aiAutoTitle: aiAutoTitleToggle.checked,
@@ -1478,6 +1493,27 @@ function handleDeveloperModeToggle(e) {
   }
 }
 
+async function handleTestGalaxyBrainConnection() {
+  const instanceUrl = galaxyBrainUrlInput.value.trim();
+  const apiKey = galaxyBrainApiKeyInput.value.trim();
+
+  testGalaxyBrainBtn.disabled = true;
+  testGalaxyBrainBtn.textContent = 'Testing...';
+
+  try {
+    // Checks the credentials as typed, without storing them first.
+    const result = await GalaxyBrainService.testConnection(instanceUrl, apiKey);
+    if (result.ok) {
+      showToast('Connected to Galaxy Brain', 'success');
+    } else {
+      showToast(result.error || 'Could not connect to Galaxy Brain', 'error');
+    }
+  } finally {
+    testGalaxyBrainBtn.disabled = false;
+    testGalaxyBrainBtn.textContent = 'Test Connection';
+  }
+}
+
 async function handleTestGitHubConnection() {
   const pat = githubTokenInput.value.trim();
   if (!pat) {
@@ -1560,6 +1596,77 @@ async function handleNotionSignOut() {
 // ============================================================================
 // Notion Integration Functions
 // ============================================================================
+
+/**
+ * Save the current page to Galaxy Brain, along with whatever was dictated.
+ *
+ * Unlike the other destinations there is no intermediate form: a capture is the
+ * least committal thing Galaxy Brain stores, and deciding it is a paper or an
+ * experiment happens there, later.
+ */
+async function handleGalaxyBrainDestination() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url) {
+      showToast('No active tab found', 'error');
+      return;
+    }
+    if (!/^https?:/i.test(tab.url)) {
+      showToast('Only http and https pages can be captured', 'error');
+      return;
+    }
+
+    // Best effort: a page that blocks scripting still captures as a link.
+    let pageText = '';
+    let selection = '';
+    try {
+      const [injected] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => ({
+          text: document.body?.innerText?.slice(0, 500000) || '',
+          selection: window.getSelection()?.toString() || ''
+        })
+      });
+      pageText = injected?.result?.text || '';
+      selection = injected?.result?.selection || '';
+    } catch {
+      console.log('[Side Panel] Could not read page text; capturing the link only');
+    }
+
+    const settings = await getSettings();
+
+    const created = await GalaxyBrainService.capture({
+      url: tab.url,
+      title: tab.title || '',
+      content: pageText,
+      selection,
+      note: currentTranscription,
+      tags: settings.defaultTags
+    });
+
+    await addToHistory({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      transcription: currentTranscription,
+      destination: 'galaxy-brain',
+      status: 'success',
+      artifactTitle: created.title,
+      metadata: {
+        'galaxy-brain': {
+          captureId: created.id,
+          url: created.url
+        }
+      }
+    });
+
+    showToast('Saved to Galaxy Brain!', 'success');
+    resetRecordingUI();
+    showScreen(screens.RECORDING);
+  } catch (error) {
+    console.error('[Side Panel] Galaxy Brain capture failed:', error);
+    showToast(error.message || 'Could not save to Galaxy Brain', 'error');
+  }
+}
 
 async function handleNotionDestination() {
   try {
@@ -2409,6 +2516,7 @@ function showHistoryDetailModal(item) {
     'github-issue': 'GitHub Issue',
     'github-project': 'GitHub Project',
     'notion': 'Notion',
+    'galaxy-brain': 'Galaxy Brain',
     'draft': 'Draft'
   };
   modalDestination.textContent = destinationNames[item.destination] || item.destination;

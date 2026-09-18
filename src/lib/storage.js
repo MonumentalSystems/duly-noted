@@ -233,6 +233,10 @@ const DEFAULT_SETTINGS = {
   onenoteDefaultNotebook: null,
   onenoteDefaultSection: null,
 
+  // Galaxy Brain (self-hosted: origin and key travel together)
+  galaxyBrainUrl: null,
+  galaxyBrainApiKey: null,
+
   // LLM
   llmProvider: 'openrouter', // 'openrouter' | 'zai' | 'claude-code'
   llmApiKey: null,
@@ -299,6 +303,8 @@ export async function isIntegrationConfigured(integration) {
       return !!settings.onenoteToken;
     case 'llm':
       return !!settings.llmApiKey;
+    case 'galaxy-brain':
+      return !!settings.galaxyBrainUrl && !!settings.galaxyBrainApiKey;
     default:
       return false;
   }

@@ -166,6 +166,17 @@
               <div class="destination-badge">Not configured</div>
             </button>
 
+            <button class="destination-option" data-destination="galaxy-brain" disabled aria-label="Save to Galaxy Brain">
+              <div class="destination-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4.5"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(60 12 12)"/></svg>
+              </div>
+              <div class="destination-info">
+                <div class="destination-name">Galaxy Brain</div>
+                <div class="destination-desc">Research workspace</div>
+              </div>
+              <div class="destination-badge">Not configured</div>
+            </button>
+
           </div>
 
         </div>
@@ -511,6 +522,29 @@
                 <span>Auto-fill description</span>
               </label>
             </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4.5"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(60 12 12)"/></svg>
+              Galaxy Brain
+            </h3>
+
+            <div class="form-group">
+              <label for="galaxyBrainUrl">Instance URL</label>
+              <input type="url" id="galaxyBrainUrl" placeholder="https://galaxybrain.info" class="input">
+            </div>
+
+            <div class="form-group">
+              <label for="galaxyBrainApiKey">API Key</label>
+              <input type="password" id="galaxyBrainApiKey" placeholder="gb_live_..." class="input">
+              <button id="testGalaxyBrainBtn" class="btn btn-small btn-secondary">Test Connection</button>
+            </div>
+
+            <p class="help-text">
+              Galaxy Brain is self-hosted, so point this at your own instance. Create a key under
+              Settings &rarr; API keys there; it is shown once, so copy it before leaving the page.
+            </p>
           </div>
 
           <div class="settings-section">
