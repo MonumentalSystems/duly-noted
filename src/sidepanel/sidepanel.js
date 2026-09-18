@@ -1668,6 +1668,8 @@ async function handleGalaxyBrainDestination() {
       region
     });
 
+    const { addToHistory } = await import('../lib/storage.js');
+    const { generateUUID } = await import('../utils/helpers.js');
     await addToHistory({
       id: generateUUID(),
       timestamp: Date.now(),
