@@ -1598,6 +1598,17 @@ async function handleNotionSignOut() {
 // ============================================================================
 
 /**
+ * A short human name for a picked element, preferring whatever a reader would
+ * recognise: its id, then a heading-ish text, then just the tag.
+ */
+function describeCapturedElement(element) {
+  if (element.idAttribute) return `#${element.idAttribute}`;
+  const [text] = (element.innerText || '').trim().split(/\r?\n/);
+  if (text && text.length <= 60) return text;
+  return `<${String(element.tagName || 'element').toLowerCase()}>`;
+}
+
+/**
  * Save the current page to Galaxy Brain, along with whatever was dictated.
  *
  * Unlike the other destinations there is no intermediate form: a capture is the
@@ -1635,13 +1646,26 @@ async function handleGalaxyBrainDestination() {
 
     const settings = await getSettings();
 
+    // A picked element is peeled off the page: its text becomes the selection
+    // and its anchors say which part of the page it was, so the card can point
+    // back at the exact element rather than the whole document.
+    const region = capturedElement
+      ? {
+          cssSelector: capturedElement.cssSelector,
+          xpath: capturedElement.xpath,
+          tagName: capturedElement.tagName,
+          label: describeCapturedElement(capturedElement)
+        }
+      : undefined;
+
     const created = await GalaxyBrainService.capture({
       url: tab.url,
       title: tab.title || '',
       content: pageText,
-      selection,
+      selection: capturedElement ? (capturedElement.innerText || selection) : selection,
       note: currentTranscription,
-      tags: settings.defaultTags
+      tags: settings.defaultTags,
+      region
     });
 
     await addToHistory({

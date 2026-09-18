@@ -60,6 +60,8 @@ export class GalaxyBrainService {
    * @param {string} [capture.selection] - what the person highlighted
    * @param {string} [capture.note] - the transcribed voice note
    * @param {string[]} [capture.tags]
+   * @param {{cssSelector?: string, xpath?: string, tagName?: string, label?: string}} [capture.region]
+   *   which part of the page this was peeled from, when an element was picked
    * @returns {Promise<{id: string|null, title: string, url: string, capturedAt: string}>}
    */
   static async capture(capture) {
@@ -78,6 +80,7 @@ export class GalaxyBrainService {
         selection: capture.selection,
         note: capture.note,
         tags: capture.tags,
+        region: capture.region,
         source: 'duly-noted'
       })
     });
