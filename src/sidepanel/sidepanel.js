@@ -97,6 +97,7 @@ const maxDurationInput = document.getElementById('maxDuration');
 const themeSwitcher = document.getElementById('themeSwitcher');
 
 // Page Context Tools elements
+const capturePageBtn = document.getElementById('capturePageBtn');
 const captureScreenshotBtn = document.getElementById('captureScreenshotBtn');
 const selectElementBtn = document.getElementById('selectElementBtn');
 const captureConsoleBtn = document.getElementById('captureConsoleBtn');
@@ -306,6 +307,7 @@ githubProjectSearch.addEventListener('blur', () => {
 // No need for message listeners
 
 // Page Context Tools
+capturePageBtn.addEventListener('click', handleCaptureWebPage);
 captureScreenshotBtn.addEventListener('click', handleCaptureScreenshot);
 selectElementBtn.addEventListener('click', handleSelectElement);
 captureConsoleBtn.addEventListener('click', handleCaptureConsole);
@@ -1609,6 +1611,24 @@ function describeCapturedElement(element) {
 }
 
 /**
+ * Ask the page content script for a bounded, non-executable HTML clip.
+ */
+async function captureStructuredPage(tabId) {
+  await ensureContentScriptInjected(tabId);
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, { type: 'CAPTURE_WEB_PAGE' }, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else if (!response?.success || !response.data) {
+        reject(new Error(response?.error || 'The page could not be clipped'));
+      } else {
+        resolve(response.data);
+      }
+    });
+  });
+}
+
+/**
  * Save the current page to Galaxy Brain, along with whatever was dictated.
  *
  * Unlike the other destinations there is no intermediate form: a capture is the
@@ -1627,10 +1647,12 @@ async function handleGalaxyBrainDestination() {
       return;
     }
 
-    // Best effort: a page that blocks scripting still captures as a link.
-    let pageText = '';
-    let selection = '';
+    // Prefer a structured, sanitized HTML clip. If the content script cannot
+    // run, retain the previous plain-text behavior as a useful fallback.
+    let pageCapture;
     try {
+      pageCapture = await captureStructuredPage(tab.id);
+    } catch {
       const [injected] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => ({
@@ -1638,10 +1660,16 @@ async function handleGalaxyBrainDestination() {
           selection: window.getSelection()?.toString() || ''
         })
       });
-      pageText = injected?.result?.text || '';
-      selection = injected?.result?.selection || '';
-    } catch {
-      console.log('[Side Panel] Could not read page text; capturing the link only');
+      pageCapture = {
+        url: tab.url,
+        title: tab.title || '',
+        format: 'text',
+        content: injected?.result?.text || `${tab.title || tab.url}\n\n${tab.url}`,
+        selection: injected?.result?.selection || '',
+        capturedAt: new Date().toISOString(),
+        imageCount: 0,
+        simplified: true
+      };
     }
 
     const settings = await getSettings();
@@ -1659,13 +1687,17 @@ async function handleGalaxyBrainDestination() {
       : undefined;
 
     const created = await GalaxyBrainService.capture({
-      url: tab.url,
-      title: tab.title || '',
-      content: pageText,
-      selection: capturedElement ? (capturedElement.innerText || selection) : selection,
+      url: pageCapture.url || tab.url,
+      title: pageCapture.title || tab.title || '',
+      format: pageCapture.format,
+      content: pageCapture.content,
+      selection: capturedElement
+        ? (capturedElement.innerText || pageCapture.selection).slice(0, 100000)
+        : (pageCapture.selection || '').slice(0, 100000),
       note: currentTranscription,
       tags: settings.defaultTags,
-      region
+      region,
+      capturedAt: pageCapture.capturedAt
     });
 
     const { addToHistory } = await import('../lib/storage.js');
@@ -1673,7 +1705,7 @@ async function handleGalaxyBrainDestination() {
     await addToHistory({
       id: generateUUID(),
       timestamp: Date.now(),
-      transcription: currentTranscription,
+      transcription: currentTranscription || `Clipped ${pageCapture.title || tab.title || tab.url}`,
       destination: 'galaxy-brain',
       status: 'success',
       artifactTitle: created.title,
@@ -1685,12 +1717,17 @@ async function handleGalaxyBrainDestination() {
       }
     });
 
-    showToast('Saved to Galaxy Brain!', 'success');
+    const savedMessage = pageCapture.simplified
+      ? 'Saved a simplified page clip to Galaxy Brain'
+      : `Saved full page${pageCapture.imageCount ? ` with ${pageCapture.imageCount} images` : ''} to Galaxy Brain`;
+    showToast(savedMessage, 'success');
     resetRecordingUI();
     showScreen(screens.RECORDING);
+    return true;
   } catch (error) {
     console.error('[Side Panel] Galaxy Brain capture failed:', error);
     showToast(error.message || 'Could not save to Galaxy Brain', 'error');
+    return false;
   }
 }
 
@@ -2812,6 +2849,30 @@ function resetProjectForm() {
 // ============================================================================
 
 /**
+ * One-click full-page web clip to Galaxy Brain. The current note, if any, is
+ * saved alongside the page as commentary.
+ */
+async function handleCaptureWebPage() {
+  const original = capturePageBtn.innerHTML;
+  try {
+    const settings = await getSettings();
+    if (!settings.galaxyBrainUrl || !settings.galaxyBrainApiKey) {
+      showToast('Configure Galaxy Brain in Settings before clipping a page', 'warning');
+      return;
+    }
+
+    currentTranscription = noteBox.textContent.trim();
+    capturePageBtn.disabled = true;
+    capturePageBtn.textContent = 'Clipping...';
+    showToast('Capturing the full page...', 'info');
+    await handleGalaxyBrainDestination();
+  } finally {
+    capturePageBtn.disabled = false;
+    capturePageBtn.innerHTML = original;
+  }
+}
+
+/**
  * Capture a screenshot of the active tab
  */
 async function handleCaptureScreenshot() {
@@ -2959,6 +3020,7 @@ async function ensureContentScriptInjected(tabId) {
             'src/content-scripts/element-inspector.js',
             'src/content-scripts/element-selector.js',
             'src/content-scripts/console-interceptor.js',
+            'src/content-scripts/web-clipper.js',
             'src/content-scripts/main.js'
           ]
         }).then(() => resolve()).catch(() => resolve());

@@ -22,6 +22,7 @@ export class GalaxyBrainService {
     const trimmed = value.trim();
     if (!trimmed) return null;
 
+    if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:\/\//i.test(trimmed)) return null;
     const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     try {
       const url = new URL(withScheme);
@@ -57,30 +58,37 @@ export class GalaxyBrainService {
    * @param {string} capture.url - the page being captured
    * @param {string} [capture.title]
    * @param {string} [capture.content] - page text
+   * @param {'html'|'markdown'|'text'} [capture.format]
    * @param {string} [capture.selection] - what the person highlighted
    * @param {string} [capture.note] - the transcribed voice note
    * @param {string[]} [capture.tags]
    * @param {{cssSelector?: string, xpath?: string, tagName?: string, label?: string}} [capture.region]
+   * @param {string} [capture.capturedAt]
+   * @param {string} [capture.idempotencyKey]
    *   which part of the page this was peeled from, when an element was picked
    * @returns {Promise<{id: string|null, title: string, url: string, capturedAt: string}>}
    */
   static async capture(capture) {
     const { origin, apiKey } = await GalaxyBrainService.getConfig();
+    const idempotencyKey = capture.idempotencyKey || `duly-noted:${crypto.randomUUID()}`;
 
     const response = await fetch(`${origin}/api/capture`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey
       },
       body: JSON.stringify({
         url: capture.url,
         title: capture.title,
+        format: capture.format || 'text',
         content: capture.content,
         selection: capture.selection,
         note: capture.note,
         tags: capture.tags,
         region: capture.region,
+        capturedAt: capture.capturedAt,
         source: 'duly-noted'
       })
     });
@@ -90,6 +98,9 @@ export class GalaxyBrainService {
     }
     if (response.status === 403) {
       throw new Error('This API key is not allowed to capture. Create one with capture access.');
+    }
+    if (response.status === 409) {
+      throw new Error('Galaxy Brain found a conflicting retry. Capture the page again.');
     }
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));

@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "package": "node scripts/package.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "check": "node --check src/content-scripts/web-clipper.js && node --check src/content-scripts/main.js && node --check src/lib/galaxybrain-service.js && node --check src/sidepanel/sidepanel.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "keywords": [],
   "author": "",

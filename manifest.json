@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Duly Noted",
   "description": "Capture voice notes, screenshots, page elements, and console logs. Send to GitHub Issues, Projects, Notion, or save as drafts.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
@@ -34,6 +34,7 @@
         "src/content-scripts/element-inspector.js",
         "src/content-scripts/element-selector.js",
         "src/content-scripts/console-interceptor.js",
+        "src/content-scripts/web-clipper.js",
         "src/content-scripts/main.js"
       ],
       "run_at": "document_end"

@@ -9,6 +9,7 @@ class ContentScriptCoordinator {
     this.elementInspector = new window.DulyNoted.ElementInspector();
     this.elementSelector = new window.DulyNoted.ElementSelector();
     this.consoleInterceptor = new window.DulyNoted.ConsoleInterceptor();
+    this.webClipper = new window.DulyNoted.WebClipper();
     this.isInitialized = false;
   }
 
@@ -87,6 +88,14 @@ class ContentScriptCoordinator {
         case 'CLEAR_CONSOLE_LOGS':
           this.consoleInterceptor.clearLogs();
           sendResponse({ success: true });
+          return true;
+
+        case 'CAPTURE_WEB_PAGE':
+          try {
+            sendResponse({ success: true, data: this.webClipper.capture() });
+          } catch (error) {
+            sendResponse({ success: false, error: error.message });
+          }
           return true;
 
         default:
