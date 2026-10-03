@@ -23,7 +23,16 @@ test('normalizes a configured Galaxy Brain instance to its origin', () => {
     GalaxyBrainService.normalizeInstanceUrl('galaxybrain.example/workspace/'),
     'https://galaxybrain.example'
   );
+  assert.equal(
+    GalaxyBrainService.normalizeInstanceUrl('localhost:3000/workspace'),
+    'https://localhost:3000'
+  );
+  assert.equal(
+    GalaxyBrainService.normalizeInstanceUrl('galaxybrain.example:8443/workspace'),
+    'https://galaxybrain.example:8443'
+  );
   assert.equal(GalaxyBrainService.normalizeInstanceUrl('file:///tmp/brain'), null);
+  assert.equal(GalaxyBrainService.normalizeInstanceUrl('javascript:alert(1)'), null);
 });
 
 test('sends an exact HTML web clip with a stable idempotency key', async () => {

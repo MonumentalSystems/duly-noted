@@ -13,6 +13,7 @@ import { GitHubCache } from '../lib/github-cache.js';
 import { NotionOAuth } from '../lib/notion-oauth.js';
 import { NotionService } from '../lib/notion-service.js';
 import { GalaxyBrainService } from '../lib/galaxybrain-service.js';
+import { capturePageOrFallback } from '../lib/page-capture.js';
 
 console.log('[Side Panel] Loading...');
 
@@ -1647,30 +1648,22 @@ async function handleGalaxyBrainDestination() {
       return;
     }
 
-    // Prefer a structured, sanitized HTML clip. If the content script cannot
-    // run, retain the previous plain-text behavior as a useful fallback.
-    let pageCapture;
-    try {
-      pageCapture = await captureStructuredPage(tab.id);
-    } catch {
-      const [injected] = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => ({
-          text: document.body?.innerText?.slice(0, 500000) || '',
-          selection: window.getSelection()?.toString() || ''
-        })
-      });
-      pageCapture = {
-        url: tab.url,
-        title: tab.title || '',
-        format: 'text',
-        content: injected?.result?.text || `${tab.title || tab.url}\n\n${tab.url}`,
-        selection: injected?.result?.selection || '',
-        capturedAt: new Date().toISOString(),
-        imageCount: 0,
-        simplified: true
-      };
-    }
+    // Prefer a structured, sanitized HTML clip. If either browser scripting
+    // attempt is denied, retain URL/title provenance as a link capture.
+    const pageCapture = await capturePageOrFallback({
+      tab,
+      captureStructured: captureStructuredPage,
+      captureText: async (tabId) => {
+        const [injected] = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => ({
+            text: document.body?.innerText?.slice(0, 500000) || '',
+            selection: window.getSelection()?.toString() || ''
+          })
+        });
+        return injected?.result;
+      }
+    });
 
     const settings = await getSettings();
 

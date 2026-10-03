@@ -22,7 +22,9 @@ export class GalaxyBrainService {
     const trimmed = value.trim();
     if (!trimmed) return null;
 
-    if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:\/\//i.test(trimmed)) return null;
+    const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+    const isHostnameWithPort = /^[a-z0-9.-]+:\d{1,5}(?:[/?#]|$)/i.test(trimmed);
+    if (hasScheme && !/^https?:\/\//i.test(trimmed) && !isHostnameWithPort) return null;
     const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     try {
       const url = new URL(withScheme);
