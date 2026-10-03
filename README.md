@@ -2,6 +2,8 @@
 
 **capture creativity**
 
+Galaxy Brain can receive a full-page web clip: click **Clip page** to save cleaned HTML with the page's headings, lists, tables, links, and image references instead of only a viewport screenshot. The clipper removes scripts, forms, and embedded executables before upload.
+
 A Chrome extension that lets you quickly capture voice notes, screenshots, page elements, and console logs — then send them to GitHub Issues, GitHub Projects, Notion, or save locally as drafts. Never lose a great idea again.
 
 [![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/DavinciDreams/duly-noted/releases/tag/v1.2.0)
